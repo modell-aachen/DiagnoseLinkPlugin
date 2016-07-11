@@ -1,0 +1,2 @@
+ONLYIF ( $Foswiki::Plugins::VERSION < 2.3)
+Foswiki::Plugins::JQueryPlugin,>=1.0,perl,Required.
