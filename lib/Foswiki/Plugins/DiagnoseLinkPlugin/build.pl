@@ -27,13 +27,13 @@ BEGIN {
 use Foswiki::Contrib::Build;
 
 # Declare our build package
-package BuildBuild;
+package DiagnoseLinkPluginBuild;
 use Foswiki::Contrib::Build;
 our @ISA = qw( Foswiki::Contrib::Build );
 
 sub new {
     my $class = shift;
-    return bless( $class->SUPER::new("EmptyPlugin"), $class );
+    return bless( $class->SUPER::new("DiagnoseLinkPlugin"), $class );
 }
 
 # Example: Override the build target
@@ -48,7 +48,7 @@ sub target_build {
 package main;
 
 # Create the build object
-my $build = new BuildBuild();
+my $build = new DiagnoseLinkPluginBuild();
 
 # Build the target on the command line, or the default target
 $build->build( $build->{target} );
