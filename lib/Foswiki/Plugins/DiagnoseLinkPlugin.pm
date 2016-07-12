@@ -99,9 +99,13 @@ sub completePageHandler {
     next if $class =~ /foswikiNewLink/;
 
     my $isFile = $href =~ /^($attachUrl|$attachUrlExtra|$attachUrlPath|$attachUrlPathExtra|$pubUrl|$pubUrlExtra|$pubUrlPath|$pubUrlPathExtra)/ || 0;
-    my $isTopic = $isFile ? 0 : ($href =~ /^($scriptUrl|$scriptUrlExtra|$scriptUrlPath)/ || 0);
-    # ignore anything else starting with /bin
-    $isTopic = $href =~ /^$root(?!bin)/ || 0 unless $isTopic;
+    my $isTopic = 0;
+    unless ($isFile) {
+      $href =~ /^($scriptUrl|$scriptUrlExtra|$scriptUrlPath)/ || 0;
+      # ignore anything else starting with /bin
+      $isTopic = $href =~ /^$root(?!bin)/ || 0 unless $isTopic;
+    }
+
     next unless $isFile || $isTopic;
 
     # strip off "bloat"
