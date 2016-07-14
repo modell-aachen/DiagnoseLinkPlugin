@@ -91,10 +91,12 @@ sub completePageHandler {
   while ($html =~ /(<a[^>]+>)/g) {
     my $link = $1;
     my $href = $1 if $link =~ /href=["']([^"']+)["']/;
+    $href = '' unless defined $href;
     # skip anchors, empty links, ...
     next if $href =~ /^(#|\s*)$/;
 
     my $class = $1 if $link =~ /(class=["'][^"']+["'])/;
+    $class = '' unless defined $class;
     # skip already handled links
     next if $class =~ /foswikiNewLink/;
 
