@@ -93,6 +93,7 @@ sub completePageHandler {
     my $href = $1 if $link =~ /href=["']([^"']+)["']/;
     $href = '' unless defined $href;
     # skip anchors, empty links, ...
+    $href = Foswiki::urlDecode($href);
     next if $href =~ /^(#|\s*)$/;
 
     my $class = $1 if $link =~ /(class=["'][^"']+["'])/;
