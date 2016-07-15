@@ -157,7 +157,7 @@ sub _buildLink {
 1;
 
 __END__
-Q.Wiki Tasks API - Modell Aachen GmbH
+Q.Wiki DiagnoseLinkPlugin - Modell Aachen GmbH
 
 Author: %$AUTHOR%
 
