@@ -1,0 +1,14 @@
+a.missingContent,
+a.missingContent:focus,
+a.missingContent:visited {
+  border-bottom: 1px dotted #b00000;
+  color: #b00000;
+  text-decoration: none;
+}
+
+a.missingContent:active,
+a.missingContent:hover {
+  border-bottom: 1px solid #b00000;
+  color: #b00000;
+  text-decoration: none;
+}
