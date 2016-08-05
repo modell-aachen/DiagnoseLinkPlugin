@@ -1,0 +1,5 @@
+!noci
+data/System/DiagnoseLinkPlugin.txt 0644
+lib/Foswiki/Plugins/DiagnoseLinkPlugin.pm 0444
+lib/Foswiki/Plugins/DiagnoseLinkPlugin/Config.spec 0444
+pub/System/DiagnoseLinkPlugin/diagnose.css 0644
