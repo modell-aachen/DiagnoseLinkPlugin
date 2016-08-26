@@ -92,8 +92,14 @@ sub completePageHandler {
     my $link = $1;
     my $href = $1 if $link =~ /href=["']([^"']+)["']/;
     $href = '' unless defined $href;
+    my $decodedHref = Foswiki::urlDecode($href);
+    # Decoding has some problems if there are non encoded characters (e.g. umlauts)
+    # in the string (#14506). If the length did not change after decoding
+    # we assume that the original string was not encoded and we keep it.
+    if(length($decodedHref) != length($href)){
+      $href = $decodedHref;
+    }
     # skip anchors, empty links, ...
-    $href = Foswiki::urlDecode($href);
     next if $href =~ /^(#|\s*)$/;
 
     my $class = $1 if $link =~ /(class=["'][^"']+["'])/;
