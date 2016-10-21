@@ -3,6 +3,7 @@ package Foswiki::Plugins::DiagnoseLinkPlugin;
 use strict;
 use warnings;
 
+use Encode;
 use Foswiki::Func;
 use Foswiki::Meta;
 use Foswiki::Plugins;
@@ -92,13 +93,20 @@ sub completePageHandler {
     my $link = $1;
     my $href = $1 if $link =~ /href=["']([^"']+)["']/;
     $href = '' unless defined $href;
-    my $decodedHref = Foswiki::urlDecode($href);
+    my $decoded = $href;
+    $decoded =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
+
     # Decoding has some problems if there are non encoded characters (e.g. umlauts)
     # in the string (#14506). If the length did not change after decoding
     # we assume that the original string was not encoded and we keep it.
-    if(length($decodedHref) != length($href)){
-      $href = $decodedHref;
+    if(length($decoded) != length($href)) {
+      eval {
+        $decoded = Encode::decode('UTF-8', $decoded, Encode::FB_CROAK);
+      };
+
+      $href = $decoded;
     }
+
     # skip anchors, empty links, ...
     next if $href =~ /^(#|\s*)$/;
 
