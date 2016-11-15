@@ -120,7 +120,7 @@ sub completePageHandler {
     next if $href =~ /^(#|\s*)$/;
 
     my $class = '';
-    my $class = $1 if $link =~ /(class=["'][^"']+["'])/;
+    $class = $1 if $link =~ /(class=["'][^"']+["'])/;
 
     # skip already handled links
     next if $class =~ /foswikiNewLink/;
