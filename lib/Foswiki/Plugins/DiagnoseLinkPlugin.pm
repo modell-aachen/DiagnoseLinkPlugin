@@ -7,6 +7,7 @@ use Encode;
 use Foswiki::Func;
 use Foswiki::Meta;
 use Foswiki::Plugins;
+use HTML::Entities;
 
 use version;
 our $VERSION = version->declare('1.0.0');
@@ -89,12 +90,20 @@ sub completePageHandler {
   my $missingContent = $Foswiki::cfg{Plugins}{DiagnoseLinkPlugin}{MissingAttachmentClass} || 'missingContent';
   $missingContent =~ s/^\.+//;
 
-  while ($html =~ /(<a[^>]+>)/g) {
+  while ($html =~ /(<a[^>]+>[^<]*<\/a[^>]*>)/g) {
     my $link = $1;
-    my $href = $1 if $link =~ /href=["']([^"']+)["']/;
+    my $href = $1 if $link =~ /href=["']([^"']+)["']/i;
     $href = '' unless defined $href;
     my $decoded = $href;
     $decoded =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
+
+    # extract the title information so that we can use it as possible topic title
+    my $title = '';
+    $title = $1 if $link =~ />([^<]*)<\/a>$/i;
+    $title = $1 if !$title && $link =~ /title=["']([^"']+)["']/i;
+    $title = HTML::Entities::decode_entities($title);
+    $title =~ s/^\s*//g;
+    $title =~ s/\s*$//g;
 
     # Decoding has some problems if there are non encoded characters (e.g. umlauts)
     # in the string (#14506). If the length did not change after decoding
@@ -110,17 +119,26 @@ sub completePageHandler {
     # skip anchors, empty links, ...
     next if $href =~ /^(#|\s*)$/;
 
+    my $class = '';
     my $class = $1 if $link =~ /(class=["'][^"']+["'])/;
-    $class = '' unless defined $class;
+
     # skip already handled links
     next if $class =~ /foswikiNewLink/;
 
     my $isFile = $href =~ /^($attachUrl|$attachUrlExtra|$attachUrlPath|$attachUrlPathExtra|$pubUrl|$pubUrlExtra|$pubUrlPath|$pubUrlPathExtra)/ || 0;
     my $isTopic = 0;
+    my $isRelative = 0;
     unless ($isFile) {
-      $href =~ /^($scriptUrl|$scriptUrlExtra|$scriptUrlPath)/ || 0;
+      $isTopic = $href =~ /^($scriptUrl|$scriptUrlExtra|$scriptUrlPath)/ || 0;
       # ignore anything else starting with /bin
       $isTopic = $href =~ /^$root(?!bin)/ || 0 unless $isTopic;
+
+      # Relative links to topics within the current web
+      if ($href =~ /^[A-Z]/ && $href !~ /[\/\.]/) {
+        $isTopic = 1;
+        $isRelative = 1;
+        $href = "$Foswiki::Plugins::SESSION->{webName}.$href";
+      }
     }
 
     next unless $isFile || $isTopic;
@@ -136,8 +154,11 @@ sub completePageHandler {
     if ($isTopic) {
       my ($web, $topic) = Foswiki::Func::normalizeWebTopicName(undef, $webtopic);
       unless (Foswiki::Func::topicExists($web, $topic)) {
-        my $newHref = "$scriptUrl/$web/WebCreateNewTopic?topicparent=$curWeb.$curTopic;newtopic=$web.$topic;newtopictitle=$topic";
+        $title = $topic unless $title;
+        $title = Foswiki::urlEncode($title);
+        my $newHref = "$scriptUrl/$web/WebCreateNewTopic?topicparent=$curWeb.$curTopic;newtopic=$web.$topic;newtopictitle=$title";
         my $newLink = $link;
+        $href =~ s/^$Foswiki::Plugins::SESSION->{webName}\.// if $isRelative;
         $newLink =~ s/$href/$newHref/;
 
         $newLink = _buildLink($newLink, $class, 'foswikiNewLink');
@@ -164,7 +185,8 @@ sub _buildLink {
 
   my $newLink = $link;
   $newLink =~ s/$classAttribute/$newClassAttribute/ if $classAttribute;
-  $newLink =~ s/>$/$newClassAttribute>/ unless $classAttribute;
+  # replace the first occurence of a whitespace with class="foswikiNewLink"
+  $newLink =~ s/\s/ $newClassAttribute / unless $classAttribute;
   return $newLink;
 }
 
