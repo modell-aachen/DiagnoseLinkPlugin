@@ -61,6 +61,7 @@ sub completePageHandler {
   my $meta = Foswiki::Meta->new($session);
   my $defaultUrl = $Foswiki::cfg{DefaultUrlHost};
   my $root = $Foswiki::cfg{ScriptUrlPath};
+  my $rootSuperQ = quotemeta("$root/..");
 
   # /bin/../pub
   my $attachUrl = $meta->expandMacros('%ATTACHURL%');
@@ -74,13 +75,13 @@ sub completePageHandler {
 
   # /pub
   my $attachUrlExtra = $attachUrl;
-  $attachUrlExtra =~ s/$root\/..//;
+  $attachUrlExtra =~ s/$rootSuperQ//;
   my $attachUrlPathExtra = $attachUrlPath;
-  $attachUrlPathExtra =~ s/$root\/..//;
+  $attachUrlPathExtra =~ s/$rootSuperQ//;
   my $pubUrlExtra = $pubUrl;
-  $pubUrlExtra =~ s/$root\/..//;
+  $pubUrlExtra =~ s/$rootSuperQ//;
   my $pubUrlPathExtra = $pubUrlPath;
-  $pubUrlPathExtra =~ s/$root\/..//;
+  $pubUrlPathExtra =~ s/$rootSuperQ//;
 
   # /
   $root =~ s/bin//;
@@ -125,13 +126,13 @@ sub completePageHandler {
     # skip already handled links
     next if $class =~ /foswikiNewLink/;
 
-    my $isFile = $href =~ /^($attachUrl|$attachUrlExtra|$attachUrlPath|$attachUrlPathExtra|$pubUrl|$pubUrlExtra|$pubUrlPath|$pubUrlPathExtra)/ || 0;
+    my $isFile = $href =~ /^(\Q$attachUrl\E|\Q$attachUrlExtra\E|\Q$attachUrlPath\E|\Q$attachUrlPathExtra\E|\Q$pubUrl\E|\Q$pubUrlExtra\E|\Q$pubUrlPath\E|\Q$pubUrlPathExtra\E)/ || 0;
     my $isTopic = 0;
     my $isRelative = 0;
     unless ($isFile) {
-      $isTopic = $href =~ /^($scriptUrl|$scriptUrlExtra|$scriptUrlPath)/ || 0;
+      $isTopic = $href =~ /^(\Q$scriptUrl\E|\Q$scriptUrlExtra\E|\Q$scriptUrlPath\E)/ || 0;
       # ignore anything else starting with /bin
-      $isTopic = $href =~ /^$root(?!bin)/ || 0 unless $isTopic;
+      $isTopic = $href =~ /^\Q$root\E(?!bin)/ || 0 unless $isTopic;
 
       # Relative links to topics within the current web
       if ($href =~ /^[A-Z]/ && $href !~ /[\/\.]/) {
@@ -145,8 +146,8 @@ sub completePageHandler {
 
     # strip off "bloat"
     my $webtopic = $href;
-    $webtopic =~ s/^($attachUrl|$attachUrlPath|$pubUrl|$pubUrlPath|$scriptUrl|$scriptUrlPath)//;
-    $webtopic =~ s/^$defaultUrl//;
+    $webtopic =~ s/^(\Q$attachUrl\E|\Q$attachUrlPath\E|\Q$pubUrl\E|\Q$pubUrlPath\E|\Q$scriptUrl\E|\Q$scriptUrlPath\E)//;
+    $webtopic =~ s/^\Q$defaultUrl\E//;
     $webtopic =~ s/^\///;
     $webtopic =~ s/[\?;].*$//;
     next unless $webtopic =~ /^[A-Z]/;
@@ -159,10 +160,10 @@ sub completePageHandler {
         my $newHref = "$scriptUrl/$web/WebCreateNewTopic?topicparent=$curWeb.$curTopic;newtopic=$web.$topic;newtopictitle=$title";
         my $newLink = $link;
         $href =~ s/^$Foswiki::Plugins::SESSION->{webName}\.// if $isRelative;
-        $newLink =~ s/$href/$newHref/;
+        $newLink =~ s/\Q$href\E/$newHref/;
 
         $newLink = _buildLink($newLink, $class, 'foswikiNewLink');
-        $_[0] =~ s/$link/$newLink/g;
+        $_[0] =~ s/\Q$link\E/$newLink/g;
       }
     } else {
       my @parts = split(/\//, $webtopic);
@@ -170,7 +171,7 @@ sub completePageHandler {
       my ($web, $topic) = Foswiki::Func::normalizeWebTopicName(undef, join('/', @parts));
       unless (Foswiki::Func::attachmentExists($web, $topic, $file)) {
         my $newLink = _buildLink($link, $class, $missingContent);
-        $_[0] =~ s/$link/$newLink/g;
+        $_[0] =~ s/\Q$link\E/$newLink/g;
       }
     }
   }
@@ -184,7 +185,7 @@ sub _buildLink {
   $newClassAttribute = "class=\"$class\"" unless $newClassAttribute;
 
   my $newLink = $link;
-  $newLink =~ s/$classAttribute/$newClassAttribute/ if $classAttribute;
+  $newLink =~ s/\Q$classAttribute\E/$newClassAttribute/ if $classAttribute;
   # replace the first occurence of a whitespace with class="foswikiNewLink"
   $newLink =~ s/\s/ $newClassAttribute / unless $classAttribute;
   return $newLink;
