@@ -125,6 +125,7 @@ sub completePageHandler {
 
     # skip already handled links
     next if $class =~ /foswikiNewLink/;
+    next if $class =~ /modacNewLink/;
 
     my $isFile = $href =~ /^(\Q$attachUrl\E|\Q$attachUrlExtra\E|\Q$attachUrlPath\E|\Q$attachUrlPathExtra\E|\Q$pubUrl\E|\Q$pubUrlExtra\E|\Q$pubUrlPath\E|\Q$pubUrlPathExtra\E)/ || 0;
     my $isTopic = 0;
