@@ -150,7 +150,7 @@ sub completePageHandler {
     $webtopic =~ s/^(\Q$attachUrl\E|\Q$attachUrlPath\E|\Q$pubUrl\E|\Q$pubUrlPath\E|\Q$scriptUrl\E|\Q$scriptUrlPath\E)//;
     $webtopic =~ s/^\Q$defaultUrl\E//;
     $webtopic =~ s/^\///;
-    $webtopic =~ s/[\?;].*$//;
+    $webtopic =~ s/[\?;#].*$//;
     next unless $webtopic =~ /^[A-Z]/;
 
     if ($isTopic) {
