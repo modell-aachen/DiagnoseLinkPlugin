@@ -91,7 +91,7 @@ sub completePageHandler {
   my $missingContent = $Foswiki::cfg{Plugins}{DiagnoseLinkPlugin}{MissingAttachmentClass} || 'missingContent';
   $missingContent =~ s/^\.+//;
 
-  while ($html =~ /(<a[^>]+>[^<]*<\/a[^>]*>)/g) {
+  while ($html =~ /(<a[^>]+>.*?<\/a[^>]*>)/g) {
     my $link = $1;
     my $href = $1 if $link =~ /href=["']([^"']+)["']/i;
     $href = '' unless defined $href;
@@ -106,7 +106,9 @@ sub completePageHandler {
 
     # extract the title information so that we can use it as possible topic title
     my $title = '';
-    $title = $1 if $link =~ />([^<]*)<\/a>$/i;
+    $title = $1 if $link =~ m/\bdata-topictitle="([^"]+)"/i; # note: CKEditor's "new links" will already have a foswikiNewLink class and thus not be handled by this plugin
+    $title = $1 if !$title && $link =~ m/\bdata-topictitle='([^']+)'/i;
+    $title = $1 if !$title && $link =~ />([^<]*)<\/a>$/i;
     $title = $1 if !$title && $link =~ /title=["']([^"']+)["']/i;
     $title = HTML::Entities::decode_entities($title);
     $title =~ s/^\s*//g;
