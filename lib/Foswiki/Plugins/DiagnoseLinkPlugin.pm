@@ -120,6 +120,8 @@ sub completePageHandler {
     my $class = '';
     $class = $1 if $link =~ /(class=["'][^"']+["'])/;
 
+    # skip links with exception class
+    next if $class =~ /modacSkipDiagnoseLink/;
     # skip already handled links
     next if $class =~ /foswikiNewLink/;
     next if $class =~ /modacNewLink/;

@@ -11,6 +11,7 @@ Links to missing attachments are rendered with class =missingContent= which is
 configurable in =/bin/configure=.%BR%See
 =$Foswiki::cfg{Plugins}{DiagnoseLinkPlugin}{MissingAttachmentClass}=
 
+Use 'modacSkipDiagnoseLink' class to skip link validation.
 ---++ Plugin Info
 
 | Author: | Modell Aachen !GmbH |
