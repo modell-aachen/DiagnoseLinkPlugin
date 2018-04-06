@@ -91,31 +91,28 @@ sub completePageHandler {
   my $missingContent = $Foswiki::cfg{Plugins}{DiagnoseLinkPlugin}{MissingAttachmentClass} || 'missingContent';
   $missingContent =~ s/^\.+//;
 
-  while ($html =~ /(<a[^>]+>[^<]*<\/a[^>]*>)/g) {
+  while ($html =~ /(<a[^>]+>.*?<\/a[^>]*>)/g) {
     my $link = $1;
     my $href = $1 if $link =~ /href=["']([^"']+)["']/i;
     $href = '' unless defined $href;
-    my $decoded = $href;
-    $decoded =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
+
+    # Unfortunately we may only decode %xy escapes, because urls often have
+    # mixed encodings:
+    # %ATTACHURL%/\x{256}.jpg will be %-encoded-utf-8 for the pub-url, but the
+    # attachment's name will be perl.
+    # We must, however, decode the whole sequence, since a single utf-8 code point
+    # is encoded in multiple bytes.
+    $href =~ s/((?:%[0-9A-Fa-f]{2})+)/Foswiki::urlDecode($1)/eg;
 
     # extract the title information so that we can use it as possible topic title
     my $title = '';
-    $title = $1 if $link =~ />([^<]*)<\/a>$/i;
+    $title = $1 if $link =~ m/\bdata-topictitle="([^"]+)"/i; # note: CKEditor's "new links" will already have a foswikiNewLink class and thus not be handled by this plugin
+    $title = $1 if !$title && $link =~ m/\bdata-topictitle='([^']+)'/i;
+    $title = $1 if !$title && $link =~ />([^<]*)<\/a>$/i;
     $title = $1 if !$title && $link =~ /title=["']([^"']+)["']/i;
     $title = HTML::Entities::decode_entities($title);
     $title =~ s/^\s*//g;
     $title =~ s/\s*$//g;
-
-    # Decoding has some problems if there are non encoded characters (e.g. umlauts)
-    # in the string (#14506). If the length did not change after decoding
-    # we assume that the original string was not encoded and we keep it.
-    if(length($decoded) != length($href)) {
-      eval {
-        $decoded = Encode::decode('UTF-8', $decoded, Encode::FB_CROAK);
-      };
-
-      $href = $decoded;
-    }
 
     # skip anchors, empty links, ...
     next if $href =~ /^(#|\s*)$/;
@@ -123,6 +120,8 @@ sub completePageHandler {
     my $class = '';
     $class = $1 if $link =~ /(class=["'][^"']+["'])/;
 
+    # skip links with exception class
+    next if $class =~ /modacSkipDiagnoseLink/;
     # skip already handled links
     next if $class =~ /foswikiNewLink/;
     next if $class =~ /modacNewLink/;
