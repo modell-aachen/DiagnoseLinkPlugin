@@ -51,6 +51,17 @@ JS
   return 1;
 }
 
+# Like Foswiki::urlDecode, but uses FB_CROAK.
+sub urlDecode {
+    my ($text) = @_;
+
+    $text =~ s/%([\da-fA-F]{2})/chr(hex($1))/ge;
+    eval {
+        $text = Encode::decode('UTF-8', $text, Encode::FB_CROAK);
+    };
+    return $text;
+}
+
 sub completePageHandler {
   my($html, $httpHeaders) = @_;
 
@@ -102,7 +113,7 @@ sub completePageHandler {
     # attachment's name will be perl.
     # We must, however, decode the whole sequence, since a single utf-8 code point
     # is encoded in multiple bytes.
-    $href =~ s/((?:%[0-9A-Fa-f]{2})+)/Foswiki::urlDecode($1)/eg;
+    $href =~ s/((?:%[0-9A-Fa-f]{2})+)/urlDecode($1)/eg;
 
     # extract the title information so that we can use it as possible topic title
     my $title = '';
