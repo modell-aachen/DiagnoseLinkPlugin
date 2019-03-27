@@ -1,0 +1,20 @@
+pipeline:
+  backend:
+    group: test
+    pull: true
+    image: quay.io/modellaachen/perl-test:latest
+    commands:
+      - perl -I "$PWD/backend-tests" -I "$PWD/lib" backend-tests/test.pl
+  notify:
+    image: drillster/drone-email
+    host: smtp.sendgrid.net
+    port: 2525
+    username: apikey
+    from: drone@modell-aachen.de
+    secrets: [EMAIL_PASSWORD]
+    recipients:
+      - entwickler@modell-aachen.de
+    recipients_only: true
+    when:
+      status:
+        - failure
