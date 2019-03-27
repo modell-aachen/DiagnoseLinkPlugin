@@ -28,13 +28,13 @@ sub _attributesToList {
 sub _addLink {
     my ($this, $linkChecker, $outgoing, $href) = @_;
 
-    next unless $href;
+    return unless $href;
 
     my ($isBadLink, $targetExists, $targetWeb, $targetTopic, $targetFile) = $linkChecker->check($href);
     if($targetFile) {
         $outgoing->{attachment}->{$isBadLink}->{"$targetWeb.$targetTopic/$targetFile"} = 1;
         $outgoing->{attachmentTopic}->{$isBadLink}->{"$targetWeb.$targetTopic"} = 1;
-    } else {
+    } elsif($targetWeb && $targetTopic) {
         $outgoing->{topic}->{$isBadLink}->{"$targetWeb.$targetTopic"} = 1;
     }
 }
