@@ -3,17 +3,39 @@ package Foswiki::Plugins::DiagnoseLinkPlugin;
 use strict;
 use warnings;
 
-use Encode;
 use Foswiki::Func;
-use Foswiki::Meta;
 use Foswiki::Plugins;
+use Foswiki::Attrs;
+
 use HTML::Entities;
+
+use Foswiki::Plugins::DiagnoseLinkPlugin::FoswikiLinkCheckerFactory;
+use Foswiki::Plugins::DiagnoseLinkPlugin::Indexer;
+use Foswiki::Plugins::DiagnoseLinkPlugin::AttachmentService;
+use Foswiki::Plugins::DiagnoseLinkPlugin::WikiDocumentService;
+use Foswiki::Plugins::ModacHelpersPlugin;
+use Foswiki::Plugins::ModacHelpersPlugin::LoggerInstance;
 
 use version;
 our $VERSION = version->declare('1.0.0');
 our $RELEASE = '1.0.0';
 our $NO_PREFS_IN_TOPIC = 1;
 our $SHORTDESCRIPTION = "A plugin to highlight links to topics or attachments which doesn't exist.";
+
+our $logger = Foswiki::Plugins::ModacHelpersPlugin::LoggerInstance->new();
+our $linkCheckerFactory = Foswiki::Plugins::DiagnoseLinkPlugin::FoswikiLinkCheckerFactory->new(
+    {
+        logger => $logger,
+        attachmentService => Foswiki::Plugins::DiagnoseLinkPlugin::AttachmentService->new(),
+        wikiDocumentService => Foswiki::Plugins::DiagnoseLinkPlugin::WikiDocumentService->new(),
+    },
+    {
+        DefaultUrlHost => $Foswiki::cfg{DefaultUrlHost},
+        TrashWebName => $Foswiki::cfg{TrashWebName},
+        HomeTopicName => $Foswiki::cfg{HomeTopicName},
+    },
+);
+our $indexer;
 
 sub initPlugin {
   my ($topic, $web, $user, $installWeb) = @_;
@@ -48,158 +70,133 @@ JS
   Foswiki::Func::addToZone('script', 'DIAGNOSELINKPLUGIN:JS', $js, 'JQUERYPLUGIN');
   Foswiki::Func::addToZone('head', 'DIAGNOSELINKPLUGIN:CSS', $css);
 
+  Foswiki::Plugins::SolrPlugin::registerIndexTopicHandler(
+      \&_indexTopicHandler
+  );
+
   return 1;
 }
 
-# Like Foswiki::urlDecode, but uses FB_CROAK.
-sub urlDecode {
-    my ($text) = @_;
+sub _foswikiAttrsFactory {
+    return new Foswiki::Attrs(@_);
+}
 
-    $text =~ s/%([\da-fA-F]{2})/chr(hex($1))/ge;
-    eval {
-        $text = Encode::decode('UTF-8', $text, Encode::FB_CROAK);
-    };
-    return $text;
+sub _indexTopicHandler {
+    unless($indexer) {
+        $indexer = Foswiki::Plugins::DiagnoseLinkPlugin::Indexer->new(
+            {
+                logger => $logger,
+                attachmentService => Foswiki::Plugins::DiagnoseLinkPlugin::AttachmentService->new(),
+                wikiDocumentService => Foswiki::Plugins::DiagnoseLinkPlugin::WikiDocumentService->new(),
+                foswikiAttrsFactory => \&_foswikiAttrsFactory,
+                getScriptUrlPath => Foswiki::Func->can('getScriptUrlPath'),
+                getPubUrlPath => Foswiki::Func->can('getPubUrlPath'),
+                linkCheckerFactory => $linkCheckerFactory,
+            },
+        );
+    }
+    return $indexer->indexTopicHandler(@_);
 }
 
 sub completePageHandler {
-  my($html, $httpHeaders) = @_;
+    my($html, $httpHeaders) = @_;
 
-  my $session = $Foswiki::Plugins::SESSION;
-  my $curWeb = $session->{webName};
-  my $curTopic = $session->{topicName};
+    my $session = $Foswiki::Plugins::SESSION;
 
-  my $meta = Foswiki::Meta->new($session);
-  my $defaultUrl = $Foswiki::cfg{DefaultUrlHost};
-  my $root = $Foswiki::cfg{ScriptUrlPath};
-  my $rootSuperQ = quotemeta("$root/..");
+    my $missingContent = $Foswiki::cfg{Plugins}{DiagnoseLinkPlugin}{MissingAttachmentClass} || 'missingContent';
+    $missingContent =~ s/^\.+//;
 
-  # /bin/../pub
-  my $attachUrl = $meta->expandMacros('%ATTACHURL%');
-  my $attachUrlPath = $meta->expandMacros('%ATTACHURLPATH%');
-  my $pubUrl = $meta->expandMacros('%PUBURL%');
-  my $pubUrlPath = $meta->expandMacros('%PUBURLPATH%');
+    my $linkChecker = $linkCheckerFactory->create($session->{webName}, $session->{topicName});
 
-  # /bin/view
-  my $scriptUrl = $meta->expandMacros('%SCRIPTURL{"view"}%');
-  my $scriptUrlPath = $meta->expandMacros('%SCRIPTURLPATH{"view"}%');
 
-  # /pub
-  my $attachUrlExtra = $attachUrl;
-  $attachUrlExtra =~ s/$rootSuperQ//;
-  my $attachUrlPathExtra = $attachUrlPath;
-  $attachUrlPathExtra =~ s/$rootSuperQ//;
-  my $pubUrlExtra = $pubUrl;
-  $pubUrlExtra =~ s/$rootSuperQ//;
-  my $pubUrlPathExtra = $pubUrlPath;
-  $pubUrlPathExtra =~ s/$rootSuperQ//;
+    while ($html =~ /(<(a|area)\b[^>]+>.*?<\/\2\b[^>]*>)/g) {
+        my $link = $1;
+        my ($hrefAttrib, $href) = ($1, $3) if $link =~ /\b(href=(["'])([^"']+)\2)/i;
+        next unless $href;
 
-  # /
-  $root =~ s/bin//;
-  my $scriptUrlExtra = $scriptUrl;
-  $scriptUrlExtra =~ s/\/bin\/view//;
+        my $class = '';
+        $class = $1 if $link =~ /\b(class=["'][^"']+["'])/;
 
-  my $missingContent = $Foswiki::cfg{Plugins}{DiagnoseLinkPlugin}{MissingAttachmentClass} || 'missingContent';
-  $missingContent =~ s/^\.+//;
+        # skip links with exception class
+        next if $class =~ /modacSkipDiagnoseLink/;
+        # skip already handled links
+        next if $class =~ /foswikiNewLink/;
+        next if $class =~ /modacNewLink/;
 
-  while ($html =~ /(<a[^>]+>.*?<\/a[^>]*>)/g) {
-    my $link = $1;
-    my $href = $1 if $link =~ /href=["']([^"']+)["']/i;
-    $href = '' unless defined $href;
+        my ($isBadLink, $targetExists, $web, $topic, $file) = $linkChecker->check($href);
+        if($isBadLink) {
+            my $newLink;
+            my $newClass;
+            if($file) {
+                $newLink = $link;
+                $newClass = $missingContent;
+            } else {
+                if(!$targetExists) {
+                    # extract the title information so that we can use it as possible topic title
+                    my $title = '';
+                    $title = $1 if $link =~ m/\bdata-topictitle="([^"]+)"/i; # note: CKEditor's "new links" will already have a foswikiNewLink class and thus not be handled by this plugin
+                    $title = $1 if !$title && $link =~ m/\bdata-topictitle='([^']+)'/i;
+                    $title = $1 if !$title && $link =~ />([^<]*)<\/a>$/i;
+                    $title = $2 if !$title && $link =~ /\btitle=(["'])([^"']+)\1/i;
+                    $title = HTML::Entities::decode_entities($title);
+                    $title =~ s/^\s*//g;
+                    $title =~ s/\s*$//g;
+                    $title = $topic unless $title;
 
-    # Unfortunately we may only decode %xy escapes, because urls often have
-    # mixed encodings:
-    # %ATTACHURL%/\x{256}.jpg will be %-encoded-utf-8 for the pub-url, but the
-    # attachment's name will be perl.
-    # We must, however, decode the whole sequence, since a single utf-8 code point
-    # is encoded in multiple bytes.
-    $href =~ s/((?:%[0-9A-Fa-f]{2})+)/urlDecode($1)/eg;
+                    my $newHref = Foswiki::Func::getScriptUrlPath(
+                        $web,
+                        'WebCreateNewTopic',
+                        'view',
+                        topicparent => "$session->{webName}.$session->{topicName}",
+                        newtopic => "$web.$topic",
+                        newtopictitle => $title,
+                    );
+                    $newLink = $link =~ s#\b\Q$hrefAttrib\E#href="$newHref"#r;
 
-    # extract the title information so that we can use it as possible topic title
-    my $title = '';
-    $title = $1 if $link =~ m/\bdata-topictitle="([^"]+)"/i; # note: CKEditor's "new links" will already have a foswikiNewLink class and thus not be handled by this plugin
-    $title = $1 if !$title && $link =~ m/\bdata-topictitle='([^']+)'/i;
-    $title = $1 if !$title && $link =~ />([^<]*)<\/a>$/i;
-    $title = $1 if !$title && $link =~ /title=["']([^"']+)["']/i;
-    $title = HTML::Entities::decode_entities($title);
-    $title =~ s/^\s*//g;
-    $title =~ s/\s*$//g;
-
-    # skip anchors, empty links, ...
-    next if $href =~ /^(#|\s*)$/;
-
-    my $class = '';
-    $class = $1 if $link =~ /(class=["'][^"']+["'])/;
-
-    # skip links with exception class
-    next if $class =~ /modacSkipDiagnoseLink/;
-    # skip already handled links
-    next if $class =~ /foswikiNewLink/;
-    next if $class =~ /modacNewLink/;
-
-    my $isFile = $href =~ /^(\Q$attachUrl\E|\Q$attachUrlExtra\E|\Q$attachUrlPath\E|\Q$attachUrlPathExtra\E|\Q$pubUrl\E|\Q$pubUrlExtra\E|\Q$pubUrlPath\E|\Q$pubUrlPathExtra\E)/ || 0;
-    my $isTopic = 0;
-    my $isRelative = 0;
-    unless ($isFile) {
-      $isTopic = $href =~ /^(\Q$scriptUrl\E|\Q$scriptUrlExtra\E|\Q$scriptUrlPath\E)/ || 0;
-      # ignore anything else starting with /bin
-      $isTopic = $href =~ /^\Q$root\E(?!bin)/ || 0 unless $isTopic;
-
-      # Relative links to topics within the current web
-      if ($href =~ /^[A-Z]/ && $href !~ /[\/\.]/) {
-        $isTopic = 1;
-        $isRelative = 1;
-        $href = "$Foswiki::Plugins::SESSION->{webName}.$href";
-      }
+                    $newClass = 'foswikiNewLink';
+                } else {
+                    $newLink = $link;
+                    $newClass = $missingContent;
+                }
+            }
+            $newLink = _addClass($newLink, $class, $newClass);
+            $_[0] =~ s/\Q$link\E/$newLink/g;
+        }
     }
 
-    next unless $isFile || $isTopic;
+    while ($html =~ /(<img\b[^>]+>)/g) {
+        my $link = $1;
+        my ($srcAttrib, $src) = ($1, $3) if $link =~ /\b(src=(["'])([^"']+)\2)/i;
+        next unless $src;
 
-    # strip off "bloat"
-    my $webtopic = $href;
-    $webtopic =~ s/^(\Q$attachUrl\E|\Q$attachUrlPath\E|\Q$pubUrl\E|\Q$pubUrlPath\E|\Q$scriptUrl\E|\Q$scriptUrlPath\E)//;
-    $webtopic =~ s/^\Q$defaultUrl\E//;
-    $webtopic =~ s/^\///;
-    $webtopic =~ s/[\?;#].*$//;
-    next unless $webtopic =~ /^[A-Z]/;
+        my $class = '';
+        $class = $1 if $link =~ /\b(class=(["'])[^"']+\2)/;
 
-    if ($isTopic) {
-      my ($web, $topic) = Foswiki::Func::normalizeWebTopicName(undef, $webtopic);
-      unless (Foswiki::Func::topicExists($web, $topic)) {
-        $title = $topic unless $title;
-        $title = Foswiki::urlEncode($title);
-        my $newHref = "$scriptUrl/$web/WebCreateNewTopic?topicparent=$curWeb.$curTopic;newtopic=$web.$topic;newtopictitle=$title";
-        my $newLink = $link;
-        $href =~ s/^$Foswiki::Plugins::SESSION->{webName}\.// if $isRelative;
-        $newLink =~ s/\Q$href\E/$newHref/;
+        next if $class =~ /modacSkipDiagnoseLink/;
 
-        $newLink = _buildLink($newLink, $class, 'foswikiNewLink');
-        $_[0] =~ s/\Q$link\E/$newLink/g;
-      }
-    } else {
-      my @parts = split(/\//, $webtopic);
-      my $file = pop @parts;
-      my ($web, $topic) = Foswiki::Func::normalizeWebTopicName(undef, join('/', @parts));
-      unless (Foswiki::Func::attachmentExists($web, $topic, $file)) {
-        my $newLink = _buildLink($link, $class, $missingContent);
-        $_[0] =~ s/\Q$link\E/$newLink/g;
-      }
+        my ($isBadLink, $taretExists, $web, $topic, $file) = $linkChecker->check($src);
+        if($isBadLink) {
+            my $placeholder = Foswiki::Func::getPubUrlPath(Foswiki::Plugins::ModacHelpersPlugin::getDeletedImagePlaceholder());
+            my $newLink = $link =~ s#\b\Q$srcAttrib\E#data-dlp-$srcAttrib src="$placeholder"#r;
+            $_[0] =~ s/\Q$link\E/$newLink/g;
+        }
     }
-  }
 }
 
-sub _buildLink {
-  my ($link, $classAttribute, $class) = @_;
+sub _addClass {
+    my ($link, $oldClassAttribute, $newClass) = @_;
 
-  my $newClassAttribute = $classAttribute;
-  $newClassAttribute =~ s/(["'])$/ $class$1/ if $newClassAttribute;
-  $newClassAttribute = "class=\"$class\"" unless $newClassAttribute;
+    my $newLink = $link;
 
-  my $newLink = $link;
-  $newLink =~ s/\Q$classAttribute\E/$newClassAttribute/ if $classAttribute;
-  # replace the first occurence of a whitespace with class="foswikiNewLink"
-  $newLink =~ s/\s/ $newClassAttribute / unless $classAttribute;
-  return $newLink;
+    if($oldClassAttribute) {
+        my $newClassAttribute = $oldClassAttribute =~ s/(["'])$/ $newClass$1/r;
+        $newLink =~ s/\Q$oldClassAttribute\E/$newClassAttribute/;
+    } else {
+        my $newClassAttribute = "class=\"$newClass\"";
+        $newLink =~ s/\s/ $newClassAttribute /;
+    }
+
+    return $newLink;
 }
 
 1;

@@ -1,5 +1,10 @@
 !noci
 data/System/DiagnoseLinkPlugin.txt 0644
 lib/Foswiki/Plugins/DiagnoseLinkPlugin.pm 0444
+lib/Foswiki/Plugins/DiagnoseLinkPlugin/AttachmentService.pm 0444
 lib/Foswiki/Plugins/DiagnoseLinkPlugin/Config.spec 0444
+lib/Foswiki/Plugins/DiagnoseLinkPlugin/FoswikiLinkCheckerFactory.pm 0444
+lib/Foswiki/Plugins/DiagnoseLinkPlugin/Indexer.pm 0444
+lib/Foswiki/Plugins/DiagnoseLinkPlugin/LinkCheckerInstance.pm 0444
+lib/Foswiki/Plugins/DiagnoseLinkPlugin/WikiDocumentService.pm 0444
 pub/System/DiagnoseLinkPlugin/diagnose.css 0644
