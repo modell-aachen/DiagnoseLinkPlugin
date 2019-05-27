@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Encode;
+use HTML::Entities;
 
 sub new {
     my ($class, $injections, $cfg, $currentWeb, $currentTopic) = @_;
@@ -52,6 +53,7 @@ sub check {
     my ($this, $href) = @_;
 
     $href = urlDecode($href);
+    $href = decode_entities($href);
 
     # skip anchors, empty links, ...
     return if $href =~ m/^(?:#|\s*)$/;
